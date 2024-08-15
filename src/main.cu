@@ -1,5 +1,5 @@
 #include "argparse.hpp"
-#include "models/berserk.h"
+#include "models/ethereal.h"
 
 #include <fstream>
 #include <limits>
@@ -19,10 +19,9 @@ int main(int argc, char* argv[]) {
         .help("Total number of epochs to train for")
         .scan<'i', int>();
     program.add_argument("--epoch-size")
-        .default_value(100000000)
+        .default_value(134217728)
         .help("Total positions in each epoch")
         .scan<'i', int>();
-
     program.add_argument("--val-size")
         .default_value(10000000)
         .help("Total positions for each validation epoch")
@@ -48,7 +47,7 @@ int main(int argc, char* argv[]) {
         .help("Number of positions in a mini-batch during training")
         .scan<'i', int>();
     program.add_argument("--lr-drop-epoch")
-        .default_value(500)
+        .default_value(400)
         .help("Epoch to execute an LR drop at")
         .scan<'i', int>();
     program.add_argument("--lr-drop-ratio")
@@ -137,8 +136,10 @@ int main(int argc, char* argv[]) {
         val_loader->start();
     }
 
-    model::BerserkModel model {static_cast<size_t>(ft_size), lambda, static_cast<size_t>(save_rate)};
-    model.set_loss(MPE {2.5, true});
+    /// Ethereal
+
+    model::EtherealModel model {};
+    model.set_loss(MPE {2.0, true});
     model.set_lr_schedule(StepDecayLRSchedule {lr, lr_drop_ratio, lr_drop_epoch});
 
     auto output_dir = program.get("--output");

@@ -23,7 +23,7 @@ OBJS := $(SRCS:$(SRCDIR)/%.cu=$(OBJDIR)/%.obj)
 EXE  := $(BINDIR)/Grapheus
 
 # Flag for using IMMINTRIN
-USE_IMMINTRIN ?= 1
+USE_IMMINTRIN ?= 0
 
 # If USE_IMMINTRIN is set to 0, add the -mno-avx flag
 ifeq ($(USE_IMMINTRIN), 0)
