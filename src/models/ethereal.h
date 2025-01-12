@@ -41,31 +41,28 @@ namespace model {
 
         SparseInput *half1, *half2;
 
-        const size_t n_squares       = 64;
-        const size_t n_piece_types   = 6;
-        const size_t n_colours       = 2;
-
-        const size_t n_features      = n_squares * n_piece_types * n_colours;
+        const size_t n_squares     = 64;
+        const size_t n_piece_types = 6;
+        const size_t n_colours     = 2;
+        const size_t n_features    = n_squares * n_piece_types * n_colours;
 
         // Defines the sizes of the Network's Layers
 
-        const size_t n_l0 = 768;
-        const size_t n_l1 = 32;
-        const size_t n_l2 = 1;
+        const size_t n_l0 = 32; // Outputs, for each half. So L1 input is 2 x n_l0
+        const size_t n_l1 = 1;  // Outputs. Makes this layer: 2 x n_l0 by n_l1
 
         // Defines miscellaneous hyper-parameters
 
-        const double wdl_percent  = 0.50;
-        const double eval_percent = 0.50;
+        const double wdl_percent  = 0.50; // Use x% from the WDL label
+        const double eval_percent = 0.50; // Use y% from the EVAL label
         const double sigm_coeff   = 2.315 / 400.00;
 
         // Defines the mechanism of Quantization
 
         const size_t quant_ft = 64; // x64
-        const size_t quant_l1 = 64; // x32
-        const size_t quant_l2 = 64; // None
+        const size_t quant_l1 = 64; // x64
 
-        const double clip_l1  = 127.0 / quant_l1;
+        const double clip_l1  = 127.0 / quant_l1; // Ignored for now
 
         // Defines the ADAM Optimizer's hyper-parameters
 
@@ -74,10 +71,10 @@ namespace model {
         const double adam_eps    = 1e-8;
         const double adam_warmup = 5 * 16384;
 
-        EtherealModel(size_t save_rate = 50) : ChessModel(0) /* TODO: Fix unneeded Lambda */ {
+        EtherealModel(size_t save_rate = 50) : ChessModel(0) {
 
-            half1 = add<SparseInput>(n_features, 32); // Real + Virtual
-            half2 = add<SparseInput>(n_features, 32); // Real + Virtual
+            half1 = add<SparseInput>(n_features, 32); // Max 32 pieces on the board at once
+            half2 = add<SparseInput>(n_features, 32); // Max 32 pieces on the board at once
 
             auto ft  = add<FeatureTransformer>(half1, half2, n_l0);
             ft->ft_regularization  = 1.0 / 16384.0 / 4194304.0;
@@ -86,10 +83,7 @@ namespace model {
             fta->max = 127.0;
 
             auto l1  = add<Affine>(fta, n_l1);
-            auto l1a = add<ReLU>(l1);
-
-            auto l2  = add<Affine>(l1a, n_l2);
-            auto l2a = add<Sigmoid>(l2, sigm_coeff);
+            auto l1a = add<Sigmoid>(l1);
 
             set_save_frequency(save_rate);
 
@@ -97,7 +91,6 @@ namespace model {
                 AdamWarmup({
                     {OptimizerEntry {&ft->weights}}, {OptimizerEntry {&ft->bias}},
                     {OptimizerEntry {&l1->weights}}, {OptimizerEntry {&l1->bias}},
-                    {OptimizerEntry {&l2->weights}}, {OptimizerEntry {&l2->bias}},
                 }, adam_beta1, adam_beta2, adam_eps, adam_warmup)
             );
 
@@ -107,8 +100,6 @@ namespace model {
                 QuantizerEntry<int16_t>(&ft->bias.values,    quant_ft),
                 QuantizerEntry<int16_t>(&l1->weights.values, quant_l1),
                 QuantizerEntry<int16_t>(&l1->bias.values,    quant_l1),
-                QuantizerEntry<int16_t>(&l2->weights.values, quant_l2),
-                QuantizerEntry<int16_t>(&l2->bias.values,    quant_l2),
             });
         }
 
