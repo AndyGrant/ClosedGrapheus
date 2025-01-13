@@ -144,12 +144,12 @@ struct ChessModel : Model {
             layer->dense_output.values >> data::CPU;
 
             std::cout << "LAYER " << ++idx << std::endl;
-            for (int i = 0; i < std::min((size_t) 16, layer->size); i++) {
-                std::cout << std::setw(10) << layer->dense_output.values(i, 0);
+            for (int i = 0; i < layer->size; i++) {
+                std::cout << std::setw(10) << layer->dense_output.values(i, 0) << " ";
             }
-            if (layer->size > 16) {
-                std::cout << " ......... " << layer->dense_output.values(layer->size - 1, 0);
-            }
+            // if (layer->size > 16) {
+            //     std::cout << " ......... " << layer->dense_output.values(layer->size - 1, 0);
+            // }
             std::cout << "\n";
         }
     }

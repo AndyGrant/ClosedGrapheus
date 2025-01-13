@@ -48,7 +48,7 @@ namespace model {
 
         // Defines the sizes of the Network's Layers
 
-        const size_t n_l0 = 32; // Outputs, for each half. So L1 input is 2 x n_l0
+        const size_t n_l0 = 64; // Outputs, for each half. So L1 input is 2 x n_l0
         const size_t n_l1 = 1;  // Outputs. Makes this layer: 2 x n_l0 by n_l1
 
         // Defines miscellaneous hyper-parameters
@@ -59,9 +59,10 @@ namespace model {
 
         // Defines the mechanism of Quantization
 
-        const size_t quant_ft = 64; // x64
+        const size_t quant_ft = 32; // x32
         const size_t quant_l1 = 64; // x64
 
+        const double clip_ft  = 127.0 / quant_ft; // Ignored for now
         const double clip_l1  = 127.0 / quant_l1; // Ignored for now
 
         // Defines the ADAM Optimizer's hyper-parameters
@@ -83,14 +84,16 @@ namespace model {
             fta->max = 127.0;
 
             auto l1  = add<Affine>(fta, n_l1);
-            auto l1a = add<Sigmoid>(l1);
+            auto l1a = add<Sigmoid>(l1, sigm_coeff);
 
             set_save_frequency(save_rate);
 
             add_optimizer(
                 AdamWarmup({
-                    {OptimizerEntry {&ft->weights}}, {OptimizerEntry {&ft->bias}},
-                    {OptimizerEntry {&l1->weights}}, {OptimizerEntry {&l1->bias}},
+                    {OptimizerEntry {&ft->weights}.clamp(-clip_ft, clip_ft)},
+                    {OptimizerEntry {&ft->bias}},
+                    {OptimizerEntry {&l1->weights}},
+                    {OptimizerEntry {&l1->bias}},
                 }, adam_beta1, adam_beta2, adam_eps, adam_warmup)
             );
 
