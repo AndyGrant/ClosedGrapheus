@@ -40,6 +40,7 @@ namespace model {
     struct EtherealModel : ChessModel {
 
         SparseInput *half1, *half2;
+        DenseInput *psqt;
 
         const size_t n_squares     = 64;
         const size_t n_piece_types = 6;
@@ -76,6 +77,7 @@ namespace model {
 
             half1 = add<SparseInput>(n_features, 32); // Max 32 pieces on the board at once
             half2 = add<SparseInput>(n_features, 32); // Max 32 pieces on the board at once
+            psqt  = add<DenseInput>(1);
 
             auto ft  = add<FeatureTransformer>(half1, half2, n_l0);
             ft->ft_regularization  = 1.0 / 16384.0 / 4194304.0;
@@ -83,14 +85,16 @@ namespace model {
             auto fta = add<ClippedRelu>(ft);
             fta->max = 127.0;
 
-            auto l1  = add<Affine>(fta, n_l1);
-            auto l1a = add<Sigmoid>(l1, sigm_coeff);
+            auto l1    = add<Affine>(fta, n_l1);
+            auto merge = add<WeightedSum>(psqt, l1, 1, 1);
+            auto l1a   = add<Sigmoid>(merge, sigm_coeff);
 
             set_save_frequency(save_rate);
 
             add_optimizer(
                 AdamWarmup({
                     {OptimizerEntry {&ft->weights}.clamp(-clip_ft, clip_ft)},
+                    // {OptimizerEntry {&ft->weights}},
                     {OptimizerEntry {&ft->bias}},
                     {OptimizerEntry {&l1->weights}},
                     {OptimizerEntry {&l1->bias}},
@@ -124,8 +128,12 @@ namespace model {
 
             auto& target = m_loss->target;
 
+            int material_values[] = {208, 854, 915, 1380, 2682};
+
             #pragma omp parallel for schedule(static) num_threads(8)
             for (int b = 0; b < positions->header.entry_count; b++) {
+
+                int mat_value = 0;
 
                 chess::Position* pos = &positions->positions[b];
                 chess::Color     stm = pos->m_meta.stm();
@@ -141,7 +149,12 @@ namespace model {
                     half2->sparse_output.set(b, ft_index(sq, pc, !stm));
 
                     bb = chess::lsb_reset(bb);
+
+                    mat_value += chess::color_of(pc) == stm ?  material_values[chess::type_of(pc)]
+                                                            : -material_values[chess::type_of(pc)];
                 }
+
+                psqt->dense_output.values(0, b) = 0.50 * mat_value;
 
                 float eval_target = 1.0 / (1.0 + expf(-pos->m_result.score * sigm_coeff));
                 float wdl_target  = (pos->m_result.wdl + 1) / 2.0f; // -> [1.0, 0.5, 0.0] WDL

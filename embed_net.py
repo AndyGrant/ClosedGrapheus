@@ -12,7 +12,6 @@ n_l0 = 64
 n_l1 = 1
 
 def quant_ft(f):
-    assert -128 <= f <= 127
     return int(round(f * 32))
 
 def quant_l1(f):
@@ -47,8 +46,8 @@ def main():
 
     ft_weights = [quant_ft(f) for f in ft_weights]
     ft_bias    = [quant_ft(f) for f in ft_bias   ]
-    l1_weights = [quant_l1(f) for f in l1_weights]
-    l1_bias    = [quant_l1(f) for f in l1_bias   ]
+    # l1_weights = [quant_l1(f) for f in l1_weights]
+    # l1_bias    = [quant_l1(f) for f in l1_bias   ]
 
     # x = compress_int16_array(ft_weights)
     # print (len(x))
@@ -58,7 +57,8 @@ def main():
     #
     # exit()
 
-    adj = [min(500, max(-500, f)) for f in ft_weights]
+    # adj = [min(500, max(-500, f)) for f in ft_weights]
+    adj = ft_weights
     plt.hist(adj, bins=255, color='blue', edgecolor='black')
     plt.title('Histogram Example')
     plt.xlabel('Value')
@@ -69,9 +69,9 @@ def main():
     print ('#include <stdalign.h>\n')
     print ('#include <stdint.h>\n')
     print ('alignas(64) const int8_t  ft_weights[] = {\n    %s\n};\n' % (','.join([str(f) for f in ft_weights])))
-    print ('alignas(64) const int8_t  ft_bias[]    = {\n    %s\n};\n' % (','.join([str(f) for f in ft_bias   ])))
-    print ('alignas(64) const int16_t l1_weights[] = {\n    %s\n};\n' % (','.join([str(f) for f in l1_weights])))
-    print ('alignas(64) const int16_t l1_bias[]    = {\n    %s\n};\n' % (','.join([str(f) for f in l1_bias   ])))
+    print ('alignas(64) const int16_t ft_bias[]    = {\n    %s\n};\n' % (','.join([str(f) for f in ft_bias   ])))
+    print ('alignas(64) const float   l1_weights[] = {\n    %s\n};\n' % (','.join([str(f) for f in l1_weights])))
+    print ('alignas(64) const float   l1_bias[]    = {\n    %s\n};\n' % (','.join([str(f) for f in l1_bias   ])))
 
 if __name__ == '__main__':
     main()
