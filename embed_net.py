@@ -1,7 +1,7 @@
 import argparse
 import struct
 import matplotlib.pyplot as plt
-import leb128
+import numpy as np
 
 n_squares     = 64
 n_piece_types = 6
@@ -9,7 +9,9 @@ n_colours     = 2
 n_features    = n_squares * n_piece_types * n_colours
 
 n_l0 = 64
-n_l1 = 1
+n_l1 = 8
+n_l2 = 16
+n_l3 = 1
 
 def quant_ft(f):
     return int(round(f * 32))
@@ -17,19 +19,11 @@ def quant_ft(f):
 def quant_l1(f):
     return int(round(f * 64))
 
-def compress_int16_array(int16_array):
-    compressed = bytearray()
-    for num in int16_array:
-        if num < 0:
-            num += 1 << 8
-        compressed.extend(leb128.u.encode(num))
-    return compressed
+def quant_l2(f):
+    return int(round(f * 64))
 
-def int16_to_bytearray(int16_array):
-    byte_data = bytearray()
-    for num in int16_array:
-        byte_data.extend(struct.pack('<h', num))
-    return byte_data
+def quant_l3(f):
+    return int(round(f * 64))
 
 
 def main():
@@ -43,21 +37,22 @@ def main():
         ft_bias    = struct.unpack('%df' % (n_l0             ), fin.read(n_l0              * 4))
         l1_weights = struct.unpack('%df' % (2 * n_l0 * n_l1  ), fin.read(2 * n_l0 * n_l1   * 4))
         l1_bias    = struct.unpack('%df' % (n_l1             ), fin.read(n_l1              * 4))
+        l2_weights = struct.unpack('%df' % (n_l1 * n_l2      ), fin.read(n_l1 * n_l2       * 4))
+        l2_bias    = struct.unpack('%df' % (n_l2             ), fin.read(n_l2              * 4))
+        l3_weights = struct.unpack('%df' % (n_l2 * n_l3      ), fin.read(n_l2 * n_l3       * 4))
+        l3_bias    = struct.unpack('%df' % (n_l3             ), fin.read(n_l3              * 4))
 
-    ft_weights = [quant_ft(f) for f in ft_weights]
-    ft_bias    = [quant_ft(f) for f in ft_bias   ]
-    # l1_weights = [quant_l1(f) for f in l1_weights]
-    # l1_bias    = [quant_l1(f) for f in l1_bias   ]
+    ft_weights = [     quant_ft(f) for f in ft_weights]
+    ft_bias    = [     quant_ft(f) for f in ft_bias   ]
+    l1_weights = [     quant_l1(f) for f in l1_weights]
+    l1_bias    = [32 * quant_l1(f) for f in l1_bias   ]
+    l2_weights = [     quant_l2(f) for f in l2_weights]
+    l2_bias    = [     quant_l2(f) for f in l2_bias   ]
+    l3_weights = [     quant_l3(f) for f in l3_weights]
+    l3_bias    = [     quant_l3(f) for f in l3_bias   ]
 
-    # x = compress_int16_array(ft_weights)
-    # print (len(x))
-    #
-    # with open('foo.txt', 'wb') as fout:
-    #     fout.write(x)
-    #
-    # exit()
+    l1_weights = np.array(l1_weights).reshape(2 * n_l0, n_l1).T.flatten()
 
-    # adj = [min(500, max(-500, f)) for f in ft_weights]
     adj = ft_weights
     plt.hist(adj, bins=255, color='blue', edgecolor='black')
     plt.title('Histogram Example')
@@ -70,8 +65,12 @@ def main():
     print ('#include <stdint.h>\n')
     print ('alignas(64) const int8_t  ft_weights[] = {\n    %s\n};\n' % (','.join([str(f) for f in ft_weights])))
     print ('alignas(64) const int16_t ft_bias[]    = {\n    %s\n};\n' % (','.join([str(f) for f in ft_bias   ])))
-    print ('alignas(64) const float   l1_weights[] = {\n    %s\n};\n' % (','.join([str(f) for f in l1_weights])))
-    print ('alignas(64) const float   l1_bias[]    = {\n    %s\n};\n' % (','.join([str(f) for f in l1_bias   ])))
+    print ('alignas(64) const int16_t l1_weights[] = {\n    %s\n};\n' % (','.join([str(f) for f in l1_weights])))
+    print ('alignas(64) const int32_t l1_bias[]    = {\n    %s\n};\n' % (','.join([str(f) for f in l1_bias   ])))
+    print ('alignas(64) const int16_t l2_weights[] = {\n    %s\n};\n' % (','.join([str(f) for f in l2_weights])))
+    print ('alignas(64) const int16_t l2_bias[]    = {\n    %s\n};\n' % (','.join([str(f) for f in l2_bias   ])))
+    print ('alignas(64) const int16_t l3_weights[] = {\n    %s\n};\n' % (','.join([str(f) for f in l3_weights])))
+    print ('alignas(64) const int16_t l3_bias[]    = {\n    %s\n};\n' % (','.join([str(f) for f in l3_bias   ])))
 
 if __name__ == '__main__':
     main()

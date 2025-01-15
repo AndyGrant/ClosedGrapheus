@@ -50,7 +50,9 @@ namespace model {
         // Defines the sizes of the Network's Layers
 
         const size_t n_l0 = 64; // Outputs, for each half. So L1 input is 2 x n_l0
-        const size_t n_l1 = 1;  // Outputs. Makes this layer: 2 x n_l0 by n_l1
+        const size_t n_l1 = 8;  // Outputs. Makes this layer: 2 x n_l0 by n_l1
+        const size_t n_l2 = 16;
+        const size_t n_l3 = 1;
 
         // Defines miscellaneous hyper-parameters
 
@@ -60,11 +62,11 @@ namespace model {
 
         // Defines the mechanism of Quantization
 
-        const size_t quant_ft = 32; // x32
-        const size_t quant_l1 = 64; // x64
+        const size_t quant_ft = 32;
+        const size_t quant_l1 = 32;
 
-        const double clip_ft  = 127.0 / quant_ft; // Ignored for now
-        const double clip_l1  = 127.0 / quant_l1; // Ignored for now
+        const double clip_ft  = 127.0 / quant_ft;
+        const double clip_l1  = 127.0 / quant_l1;
 
         // Defines the ADAM Optimizer's hyper-parameters
 
@@ -85,29 +87,30 @@ namespace model {
             auto fta = add<ClippedRelu>(ft);
             fta->max = 127.0;
 
-            auto l1    = add<Affine>(fta, n_l1);
-            auto merge = add<WeightedSum>(psqt, l1, 1, 1);
-            auto l1a   = add<Sigmoid>(merge, sigm_coeff);
+            auto l1  = add<Affine>(fta, n_l1);
+            auto l1a = add<ReLU>(l1);
+
+            auto l2  = add<Affine>(l1a, n_l2);
+            auto l2a = add<ReLU>(l2);
+
+            auto l3  = add<Affine>(l2a, n_l3);
+            auto l3m = add<WeightedSum>(psqt, l3, 1, 1);
+            auto l3a = add<Sigmoid>(l3m, sigm_coeff);
 
             set_save_frequency(save_rate);
 
             add_optimizer(
                 AdamWarmup({
                     {OptimizerEntry {&ft->weights}.clamp(-clip_ft, clip_ft)},
-                    // {OptimizerEntry {&ft->weights}},
                     {OptimizerEntry {&ft->bias}},
-                    {OptimizerEntry {&l1->weights}},
+                    {OptimizerEntry {&l1->weights}.clamp(-clip_l1, clip_l1)},
                     {OptimizerEntry {&l1->bias}},
+                    {OptimizerEntry {&l2->weights}},
+                    {OptimizerEntry {&l2->bias}},
+                    {OptimizerEntry {&l3->weights}},
+                    {OptimizerEntry {&l3->bias}}
                 }, adam_beta1, adam_beta2, adam_eps, adam_warmup)
             );
-
-            add_quantization(Quantizer{
-                "quant", save_rate,
-                QuantizerEntry<int16_t>(&ft->weights.values, quant_ft),
-                QuantizerEntry<int16_t>(&ft->bias.values,    quant_ft),
-                QuantizerEntry<int16_t>(&l1->weights.values, quant_l1),
-                QuantizerEntry<int16_t>(&l1->bias.values,    quant_l1),
-            });
         }
 
         int ft_index(chess::Square pc_sq, chess::Piece pc, chess::Color view) {
