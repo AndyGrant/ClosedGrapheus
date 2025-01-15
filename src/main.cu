@@ -154,12 +154,12 @@ int main(int argc, char* argv[]) {
         std::cout << "Loaded weights from previous " << *previous << std::endl;
     }
 
-    model.test_fen("1nbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKB1R w KQk - 0 1");
+    // model.test_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
-    // model.train(train_loader, val_loader, total_epochs, epoch_size, val_epoch_size);
+    model.train(train_loader, val_loader, total_epochs, epoch_size, val_epoch_size);
 
     train_loader.kill();
-    val_loader->kill();
+    // val_loader->kill();
 
     close();
     return 0;
