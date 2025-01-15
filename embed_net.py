@@ -51,6 +51,17 @@ def main():
     l3_weights = [     quant_l3(f) for f in l3_weights]
     l3_bias    = [     quant_l3(f) for f in l3_bias   ]
 
+    # Convert the list into a 768x64 numpy array
+    array = np.array(ft_weights).reshape(n_features, n_l0)
+
+    # Zero out the specified ranges
+    array[0:8, :] = 0      # White Pawn 1st
+    array[56:64, :] = 0    # White Pawn 8th
+    array[384:392, :] = 0  # Black Pawn 1st
+    array[440:448, :] = 0  # Black Pawn 8th
+
+    ft_weights = array.flatten()
+
     l1_weights = np.array(l1_weights).reshape(2 * n_l0, n_l1).T.flatten()
 
     adj = ft_weights
