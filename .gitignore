@@ -20,3 +20,6 @@ cmake-build-debug-cuda/
 build/
 .vscode/
 .python-version
+
+
+run*
