@@ -50,14 +50,14 @@ namespace model {
         // Defines the sizes of the Network's Layers
 
         const size_t n_l0 = 64; // Outputs, for each half. So L1 input is 2 x n_l0
-        const size_t n_l1 = 8;  // Outputs. Makes this layer: 2 x n_l0 by n_l1
+        const size_t n_l1 = 16; // Outputs. Makes this layer: 2 x n_l0 by n_l1
         const size_t n_l2 = 16;
         const size_t n_l3 = 1;
 
         // Defines miscellaneous hyper-parameters
 
-        const double wdl_percent  = 0.50; // Use x% from the WDL label
-        const double eval_percent = 0.50; // Use y% from the EVAL label
+        const double wdl_percent  = 1.00; // Use x% from the WDL label
+        const double eval_percent = 0.00; // Use y% from the EVAL label
         const double sigm_coeff   = 2.315 / 400.00;
 
         // Defines the mechanism of Quantization
@@ -66,6 +66,7 @@ namespace model {
         const size_t quant_l1 = 32;
 
         const double clip_ft  = 127.0 / quant_ft;
+        const double clip_l1  = 127.0 / quant_l1;
 
         // Defines the ADAM Optimizer's hyper-parameters
 
@@ -86,7 +87,9 @@ namespace model {
             auto fta = add<ClippedRelu>(ft);
             fta->max = 127.0;
 
-            auto l1  = add<Affine>(fta, n_l1);
+            auto qft = add<Quant>(fta, quant_l1);
+
+            auto l1  = add<Affine>(qft, n_l1);
             auto l1a = add<ReLU>(l1);
 
             auto l2  = add<Affine>(l1a, n_l2);
@@ -102,7 +105,7 @@ namespace model {
                 AdamWarmup({
                     {OptimizerEntry {&ft->weights}.clamp(-clip_ft, clip_ft)},
                     {OptimizerEntry {&ft->bias}},
-                    {OptimizerEntry {&l1->weights}},
+                    {OptimizerEntry {&l1->weights}.clamp(-clip_l1, clip_l1)},
                     {OptimizerEntry {&l1->bias}},
                     {OptimizerEntry {&l2->weights}},
                     {OptimizerEntry {&l2->bias}},

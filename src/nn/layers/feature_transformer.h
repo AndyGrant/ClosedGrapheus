@@ -10,6 +10,8 @@ struct FeatureTransformer : public Layer {
     SparseInput* inp1;
     SparseInput* inp2;
 
+    float quant_scalar;
+
     Tape         weights {0, 0};
     Tape         bias {0, 0};
 
@@ -20,10 +22,12 @@ struct FeatureTransformer : public Layer {
     Tape out_2 {0, 0};
 
     public:
-    FeatureTransformer(SparseInput* inp1, SparseInput* inp2, size_t half_size)
+    FeatureTransformer(SparseInput* inp1, SparseInput* inp2, size_t half_size, float quant_scalar)
         : Layer(2 * half_size)
         , inp1(inp1)
-        , inp2(inp2) {
+        , inp2(inp2)
+        , quant_scalar(quant_scalar) {
+
         inp1->use();
         inp2->use();
 
@@ -54,26 +58,28 @@ struct FeatureTransformer : public Layer {
     }
 
     void forward() override {
-        operations::affine_sparse<data::GPU>(weights.values,
+        operations::affine_sparse_qat<data::GPU>(weights.values,
                                              inp1->sparse_output,
                                              bias.values,
-                                             out_1.values);
-        operations::affine_sparse<data::GPU>(weights.values,
+                                             out_1.values,
+                                             quant_scalar);
+        operations::affine_sparse_qat<data::GPU>(weights.values,
                                              inp2->sparse_output,
                                              bias.values,
-                                             out_2.values);
+                                             out_2.values,
+                                             quant_scalar);
         //        operations::affine_sparse_shared<data::GPU>(weights.values, inp1->sparse_output,
         //        inp2->sparse_output, bias.values, dense_output.values);
     }
 
     void backward() override {
-        operations::affine_sparse_bp<data::GPU>(weights.gradients,
+        operations::affine_sparse_qat<data::GPU>(weights.gradients,
                                                 inp1->sparse_output,
                                                 bias.gradients,
                                                 out_1.values,
                                                 out_1.gradients,
                                                 ft_regularization);
-        operations::affine_sparse_bp<data::GPU>(weights.gradients,
+        operations::affine_sparse_qat<data::GPU>(weights.gradients,
                                                 inp2->sparse_output,
                                                 bias.gradients,
                                                 out_2.values,

@@ -64,9 +64,8 @@ def main():
     l1_weights = np.array(l1_weights).reshape(2 * n_l0, n_l1).T.flatten()
     l2_weights = np.array(l2_weights).reshape(    n_l1, n_l2).T.flatten()
 
-    # plt.hist(ft_weights, bins=255, color='blue', edgecolor='black')
-
-    plt.hist(l1_weights, bins=255, color='blue', edgecolor='black')
+    plt.hist(ft_weights, bins=255, color='blue', edgecolor='black')
+    # plt.hist(l1_weights, bins=255, color='blue', edgecolor='black')
 
     plt.title('Histogram Example')
     plt.xlabel('Value')
