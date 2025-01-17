@@ -78,7 +78,7 @@ inline void affine_sparse(
 }
 
 template<data::Device DEV>
-inline void affine_sparse(
+inline void affine_sparse_qat(
     data::DenseMatrix<float>& wgt,
     data::SparseMatrix      & inp,
     data::DenseMatrix<float>& bia,
@@ -108,7 +108,7 @@ inline void affine_sparse(
         dim3 grid (std::ceil((float)res.n / block_size_x),
                    std::ceil((float)res.m / block_size_y));
 
-        affine_sparse_kernel<<<grid, block>>>(
+        affine_sparse_qat_kernel<<<grid, block>>>(
             wgt.first<DEV>(),
             inp.values.address<DEV>(),
             inp.max_entries_per_column,
