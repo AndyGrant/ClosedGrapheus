@@ -80,7 +80,7 @@ __global__ void operations::affine_sparse_qat_kernel(
         // get the corresponding weight
         auto wgt = mat[MATRIX_INDEX(lda, row, b_row)];
 
-        sum += (int) (wgt * quant_scalar) / quant_scalar;
+        sum += round(wgt * quant_scalar) / quant_scalar;
     }
     res[MATRIX_INDEX(ldc, row, col)] = sum;
 };

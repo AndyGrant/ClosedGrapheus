@@ -63,10 +63,10 @@ namespace model {
         // Defines the mechanism of Quantization
 
         const size_t quant_ft = 32;
-        const size_t quant_l1 = 32;
+        const size_t quant_l1 = 64;
 
         const double clip_ft  = 127.0 / quant_ft;
-        const double clip_l1  = 127.0 / quant_l1;
+        // const double clip_l1  = 127.0 / quant_l1;
 
         // Defines the ADAM Optimizer's hyper-parameters
 
@@ -87,9 +87,7 @@ namespace model {
             auto fta = add<ClippedRelu>(ft);
             fta->max = 127.0;
 
-            auto qft = add<Quant>(fta, quant_l1);
-
-            auto l1  = add<Affine>(qft, n_l1);
+            auto l1  = add<Affine>(fta, n_l1);
             auto l1a = add<ReLU>(l1);
 
             auto l2  = add<Affine>(l1a, n_l2);
@@ -105,7 +103,7 @@ namespace model {
                 AdamWarmup({
                     {OptimizerEntry {&ft->weights}.clamp(-clip_ft, clip_ft)},
                     {OptimizerEntry {&ft->bias}},
-                    {OptimizerEntry {&l1->weights}.clamp(-clip_l1, clip_l1)},
+                    {OptimizerEntry {&l1->weights}},
                     {OptimizerEntry {&l1->bias}},
                     {OptimizerEntry {&l2->weights}},
                     {OptimizerEntry {&l2->bias}},
