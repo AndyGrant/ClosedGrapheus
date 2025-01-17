@@ -73,13 +73,13 @@ struct FeatureTransformer : public Layer {
     }
 
     void backward() override {
-        operations::affine_sparse_qat<data::GPU>(weights.gradients,
+        operations::affine_sparse_bp<data::GPU>(weights.gradients,
                                                 inp1->sparse_output,
                                                 bias.gradients,
                                                 out_1.values,
                                                 out_1.gradients,
                                                 ft_regularization);
-        operations::affine_sparse_qat<data::GPU>(weights.gradients,
+        operations::affine_sparse_bp<data::GPU>(weights.gradients,
                                                 inp2->sparse_output,
                                                 bias.gradients,
                                                 out_2.values,

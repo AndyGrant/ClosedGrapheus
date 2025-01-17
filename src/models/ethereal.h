@@ -81,7 +81,7 @@ namespace model {
             half2 = add<SparseInput>(n_features, 32); // Max 32 pieces on the board at once
             psqt  = add<DenseInput>(1);
 
-            auto ft  = add<FeatureTransformer>(half1, half2, n_l0);
+            auto ft  = add<FeatureTransformer>(half1, half2, n_l0, quant_ft);
             ft->ft_regularization  = 1.0 / 16384.0 / 4194304.0;
 
             auto fta = add<ClippedRelu>(ft);

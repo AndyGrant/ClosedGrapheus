@@ -19,6 +19,20 @@ __global__ void affine_sparse_kernel(
     const size_t                     ldc);
 // clang-format on
 
+// clang-format off
+__global__ void affine_sparse_qat_kernel(
+    const float*        __restrict__ mat,
+    const size_t*       __restrict__ inp_col_indices,
+    const size_t                     inp_col_max_entries,
+    const float*        __restrict__ bia,
+          float*        __restrict__ res,
+    const size_t                     m,
+    const size_t                     n,
+    const size_t                     lda,
+    const size_t                     ldc,
+    const float                      quant_scalar);
+// clang-format on
+
 /**
  * Performs sparse matrix multiplication followed by bias addition:
  * res = matrix * inp + bia
