@@ -1,20 +1,28 @@
 import argparse
-import struct
+import lzma
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+import struct
+import tarfile
+import tempfile
 
 n_squares     = 64
 n_piece_types = 6
 n_colours     = 2
 n_features    = n_squares * n_piece_types * n_colours
 
-n_l0 = 64
+n_l0 = 48
 n_l1 = 16
 n_l2 = 16
 n_l3 = 1
 
 def quant_ft(f):
-    return int(round(f * 32))
+    x = int(round(f * 32))
+    return x
+    if abs(x) <= 2:
+        return 0
+    return x
 
 def quant_l1(f):
     return int(round(f * 64))
@@ -25,6 +33,35 @@ def quant_l2(f):
 def quant_l3(f):
     return int(round(f * 64))
 
+
+
+
+def do_the_thing(array):
+
+    # Create a temporary file to save the numpy array
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.npy') as tmp_file:
+        # Save the numpy array to the temporary file in .npy format
+        np.save(tmp_file.name, array)
+
+        # Compress the .npy file using lzma
+        lzma_name = tmp_file.name + '.xz'
+        with open(tmp_file.name, 'rb') as f_in, lzma.open(lzma_name, 'wb') as f_out:
+            f_out.writelines(f_in)
+
+        # Compress the .xz file using tar.gz
+        tar_name = lzma_name + '.tar.gz'
+        with tarfile.open(tar_name, 'w:gz') as tar:
+            tar.add(lzma_name, arcname=os.path.basename(lzma_name))
+
+        # Get the compressed file size
+        compressed_size = os.path.getsize(tar_name)
+
+        # Optionally, clean up temporary files
+        os.remove(tmp_file.name)
+        os.remove(lzma_name)
+        os.remove(tar_name)
+
+    return compressed_size
 
 def main():
 
@@ -60,13 +97,37 @@ def main():
     array[384:392, :] = 0  # Black Pawn 1st
     array[440:448, :] = 0  # Black Pawn 8th
 
-    ft_weights = array.flatten()
+    # best = do_the_thing(array.T.flatten())
+    # print ('Best: ' , best)
+
+    while True:
+
+        break
+
+        # Shuffle the indices of the second dimension (columns)
+        shuffled_indices = np.random.permutation(array.shape[1])
+
+        # Reorder the array based on the shuffled indices
+        shuffled_array = array[:, shuffled_indices]
+
+        x = do_the_thing(shuffled_array.T.flatten())
+
+        if x < best:
+            best = x
+            print ('Best: ', best)
+            print (shuffled_indices)
+
+        # if best < 39000:
+        #     array = shuffled_array
+        #     break
+
+    ft_weights = array.T.flatten()
     l1_weights = np.array(l1_weights).reshape(2 * n_l0, n_l1).T.flatten()
     l2_weights = np.array(l2_weights).reshape(    n_l1, n_l2).T.flatten()
 
-    # plt.hist(ft_weights, bins=255, color='blue', edgecolor='black')
+    plt.hist(ft_weights, bins=255, color='blue', edgecolor='black')
 
-    plt.hist(l1_weights, bins=255, color='blue', edgecolor='black')
+    # plt.hist(l1_weights, bins=255, color='blue', edgecolor='black')
 
     plt.title('Histogram Example')
     plt.xlabel('Value')
@@ -87,3 +148,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
