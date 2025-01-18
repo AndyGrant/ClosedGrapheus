@@ -87,6 +87,7 @@ namespace model {
             auto fta = add<ClippedRelu>(ft);
             fta->max = 127.0;
 
+            // auto l1  = add<AffineQuant>(fta, n_l1, quant_l1);
             auto l1  = add<Affine>(fta, n_l1);
             auto l1a = add<ReLU>(l1);
 

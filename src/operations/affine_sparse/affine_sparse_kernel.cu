@@ -70,7 +70,7 @@ __global__ void operations::affine_sparse_qat_kernel(
     int count = inp_col_indices[offset];
 
     // track the sum
-    float sum = bia[row];
+    float sum = round(bia[row] * quant_scalar) / quant_scalar;
 
     // start at offset + 1 (offset contains the amount of values to read)
     for (int i = offset + 1; i < offset + 1 + count; i++) {

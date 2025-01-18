@@ -26,7 +26,7 @@ DEFINE_ACTIVATION(lrelu
                   , A[ida] > 0 ? B_grd[idb] : B_grd[idb] * scalar);
 
 DEFINE_ACTIVATION(quant
-                  , (int)(A[ida] * scalar) / scalar
+                  , round(A[ida] * scalar) / scalar
                   , B_grd[idb]);
 }
 
