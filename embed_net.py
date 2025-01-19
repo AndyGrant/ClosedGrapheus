@@ -8,13 +8,13 @@ n_piece_types = 6
 n_colours     = 2
 n_features    = n_squares * n_piece_types * n_colours
 
-n_l0 = 64
+n_l0 = 96
 n_l1 = 16
 n_l2 = 16
 n_l3 = 1
 
 def quant_ft(f):
-    return int(round(f * 32))
+    return int(round(f * 7))
 
 def quant_l1(f):
     return int(round(f * 64))
@@ -45,11 +45,11 @@ def main():
     ft_weights = [     quant_ft(f) for f in ft_weights]
     ft_bias    = [     quant_ft(f) for f in ft_bias   ]
     l1_weights = [     quant_l1(f) for f in l1_weights]
-    l1_bias    = [32 * quant_l1(f) for f in l1_bias   ]
+    l1_bias    = [7  * quant_l1(f) for f in l1_bias   ]
     l2_weights = [     f for f in l2_weights]
-    l2_bias    = [32 * 64 * f for f in l2_bias   ]
+    l2_bias    = [7 * 64 * f for f in l2_bias   ]
     l3_weights = [     f for f in l3_weights]
-    l3_bias    = [32 * 64 * f for f in l3_bias   ]
+    l3_bias    = [7 * 64 * f for f in l3_bias   ]
 
     # Convert the list into a 768xL1 numpy array
     array = np.array(ft_weights).reshape(n_features, n_l0)
@@ -60,7 +60,7 @@ def main():
     array[384:392, :] = 0  # Black Pawn 1st
     array[440:448, :] = 0  # Black Pawn 8th
 
-    ft_weights = array.flatten()
+    ft_weights = array.flatten().T
     l1_weights = np.array(l1_weights).reshape(2 * n_l0, n_l1).T.flatten()
     l2_weights = np.array(l2_weights).reshape(    n_l1, n_l2).T.flatten()
 
