@@ -50,14 +50,14 @@ namespace model {
         // Defines the sizes of the Network's Layers
 
         const size_t n_l0 = 48; // Outputs, for each half. So L1 input is 2 x n_l0
-        const size_t n_l1 = 16;  // Outputs. Makes this layer: 2 x n_l0 by n_l1
-        const size_t n_l2 = 16;
+        const size_t n_l1 = 32; // Outputs. Makes this layer: 2 x n_l0 by n_l1
+        const size_t n_l2 = 32;
         const size_t n_l3 = 1;
 
         // Defines miscellaneous hyper-parameters
 
-        const double wdl_percent  = 1.00; // Use x% from the WDL label
-        const double eval_percent = 0.00; // Use y% from the EVAL label
+        const double wdl_percent  = 0.50; // Use x% from the WDL label
+        const double eval_percent = 0.50; // Use y% from the EVAL label
         const double sigm_coeff   = 2.315 / 400.00;
 
         // Defines the mechanism of Quantization

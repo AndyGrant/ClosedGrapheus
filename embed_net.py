@@ -13,28 +13,15 @@ n_colours     = 2
 n_features    = n_squares * n_piece_types * n_colours
 
 n_l0 = 48
-n_l1 = 16
-n_l2 = 16
+n_l1 = 32
+n_l2 = 32
 n_l3 = 1
 
 def quant_ft(f):
-    x = int(round(f * 32))
-    return x
-    if abs(x) <= 2:
-        return 0
-    return x
+    return int(round(f * 32))
 
 def quant_l1(f):
     return int(round(f * 64))
-
-def quant_l2(f):
-    return int(round(f * 64))
-
-def quant_l3(f):
-    return int(round(f * 64))
-
-
-
 
 def do_the_thing(array):
 
@@ -79,47 +66,61 @@ def main():
         l3_weights = struct.unpack('%df' % (n_l2 * n_l3      ), fin.read(n_l2 * n_l3       * 4))
         l3_bias    = struct.unpack('%df' % (n_l3             ), fin.read(n_l3              * 4))
 
-    ft_weights = [     quant_ft(f) for f in ft_weights]
-    ft_bias    = [     quant_ft(f) for f in ft_bias   ]
-    l1_weights = [     quant_l1(f) for f in l1_weights]
-    l1_bias    = [32 * quant_l1(f) for f in l1_bias   ]
-    l2_weights = [     f for f in l2_weights]
-    l2_bias    = [32 * 64 * f for f in l2_bias   ]
-    l3_weights = [     f for f in l3_weights]
-    l3_bias    = [32 * 64 * f for f in l3_bias   ]
+    max_l2   = max(max(l2_weights), -min(l2_weights))
+    scale_l2 = ((2 ** 15) - 1) / max_l2
+
+    ft_weights = [     quant_ft(f)    for f in ft_weights]
+    ft_bias    = [     quant_ft(f)    for f in ft_bias   ]
+    l1_weights = [     quant_l1(f)    for f in l1_weights]
+    l1_bias    = [32 * quant_l1(f)    for f in l1_bias   ]
+    l2_weights = [round(f * scale_l2) for f in l2_weights]
+    l2_bias    = [32 * 64 * f         for f in l2_bias   ]
+    l3_weights = [          f         for f in l3_weights]
+    l3_bias    = [32 * 64 * f         for f in l3_bias   ]
 
     # Convert the list into a 768xL1 numpy array
     array = np.array(ft_weights).reshape(n_features, n_l0)
 
     # Zero out the specified ranges
-    array[0:8, :]     = 0  # White Pawn 1st
-    array[56:64, :]   = 0  # White Pawn 8th
-    array[384:392, :] = 0  # Black Pawn 1st
-    array[440:448, :] = 0  # Black Pawn 8th
+    # array[0:8, :]     = 0  # White Pawn 1st
+    # array[56:64, :]   = 0  # White Pawn 8th
+    # array[384:392, :] = 0  # Black Pawn 1st
+    # array[440:448, :] = 0  # Black Pawn 8th
+
+    ranges_to_delete = [
+        (440, 448),  # Black Pawn 8th
+        (384, 392),  # Black Pawn 1st
+        (56, 64),    # White Pawn 8th
+        (0, 8)       # White Pawn 1st
+    ]
+
+    # Delete the specified ranges
+    for start, end in ranges_to_delete:
+        array = np.delete(array, np.s_[start:end], axis=0)
 
     # best = do_the_thing(array.T.flatten())
     # print ('Best: ' , best)
 
-    while True:
-
-        break
-
-        # Shuffle the indices of the second dimension (columns)
-        shuffled_indices = np.random.permutation(array.shape[1])
-
-        # Reorder the array based on the shuffled indices
-        shuffled_array = array[:, shuffled_indices]
-
-        x = do_the_thing(shuffled_array.T.flatten())
-
-        if x < best:
-            best = x
-            print ('Best: ', best)
-            print (shuffled_indices)
-
-        # if best < 39000:
-        #     array = shuffled_array
-        #     break
+    # while True:
+    #
+    #     break
+    #
+    #     # Shuffle the indices of the second dimension (columns)
+    #     shuffled_indices = np.random.permutation(array.shape[1])
+    #
+    #     # Reorder the array based on the shuffled indices
+    #     shuffled_array = array[:, shuffled_indices]
+    #
+    #     x = do_the_thing(shuffled_array.T.flatten())
+    #
+    #     if x < best:
+    #         best = x
+    #         print ('Best: ', best)
+    #         print (shuffled_indices)
+    #
+    #     # if best < 39000:
+    #     #     array = shuffled_array
+    #     #     break
 
     ft_weights = array.T.flatten()
     l1_weights = np.array(l1_weights).reshape(2 * n_l0, n_l1).T.flatten()
@@ -137,14 +138,15 @@ def main():
     print ('#pragma once\n')
     print ('#include <stdalign.h>\n')
     print ('#include <stdint.h>\n')
-    print ('alignas(64) const int8_t  ft_weights[] = {\n    %s\n};\n' % (','.join([str(f) for f in ft_weights])))
-    print ('alignas(64) const int16_t ft_bias[]    = {\n    %s\n};\n' % (','.join([str(f) for f in ft_bias   ])))
-    print ('alignas(64) const int16_t l1_weights[] = {\n    %s\n};\n' % (','.join([str(f) for f in l1_weights])))
-    print ('alignas(64) const int32_t l1_bias[]    = {\n    %s\n};\n' % (','.join([str(f) for f in l1_bias   ])))
-    print ('alignas(64) const float   l2_weights[] = {\n    %s\n};\n' % (','.join([str(f) for f in l2_weights])))
-    print ('alignas(64) const float   l2_bias[]    = {\n    %s\n};\n' % (','.join([str(f) for f in l2_bias   ])))
-    print ('alignas(64) const float   l3_weights[] = {\n    %s\n};\n' % (','.join([str(f) for f in l3_weights])))
-    print ('alignas(64) const float   l3_bias[]    = {\n    %s\n};\n' % (','.join([str(f) for f in l3_bias   ])))
+    print ('const float scale_l2 = %f;\n' % (scale_l2))
+    print ('alignas(64) const int8_t  ft_weights_i8[]  = {\n    %s\n};\n' % (','.join([str(f) for f in ft_weights])))
+    print ('alignas(64) const int16_t ft_bias[]        = {\n    %s\n};\n' % (','.join([str(f) for f in ft_bias   ])))
+    print ('alignas(64) const int16_t l1_weights[]     = {\n    %s\n};\n' % (','.join([str(f) for f in l1_weights])))
+    print ('alignas(64) const int32_t l1_bias[]        = {\n    %s\n};\n' % (','.join([str(f) for f in l1_bias   ])))
+    print ('alignas(64) const int16_t l2_weights_i16[] = {\n    %s\n};\n' % (','.join([str(f) for f in l2_weights])))
+    print ('alignas(64) const float   l2_bias[]        = {\n    %s\n};\n' % (','.join([str(f) for f in l2_bias   ])))
+    print ('alignas(64) const float   l3_weights[]     = {\n    %s\n};\n' % (','.join([str(f) for f in l3_weights])))
+    print ('alignas(64) const float   l3_bias[]        = {\n    %s\n};\n' % (','.join([str(f) for f in l3_bias   ])))
 
 if __name__ == '__main__':
     main()
