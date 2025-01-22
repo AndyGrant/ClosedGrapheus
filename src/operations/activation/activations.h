@@ -24,5 +24,9 @@ DEFINE_ACTIVATION(crelu
 DEFINE_ACTIVATION(lrelu
                   , A[ida] > 0 ? A[ida] : A[ida] * scalar
                   , A[ida] > 0 ? B_grd[idb] : B_grd[idb] * scalar);
+
+DEFINE_ACTIVATION(screlu
+                  , (A[ida] * A[ida] < scalar ? A[ida] * A[ida] : scalar)
+                  , (A[ida] * A[ida] < scalar ? B_grd[idb] * 2 * A[ida] : 0));
 }
 

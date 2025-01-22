@@ -168,4 +168,37 @@ struct LeakyReLU : public Layer {
                                         grad_op);
     }
 };
+
+struct SquaredClippedReLU : public Layer {
+    Layer*            prev;
+    GradientOperation grad_op;
+    int               use_id;
+    float             max;
+    explicit SquaredClippedReLU(Layer* prev, float max = 1)
+        : Layer(prev->size)
+        , prev(prev)
+        , max(max) {
+        use_id = prev->use();
+    }
+
+    void compile(size_t batch_size) override {
+        this->compile_suboutput(batch_size, Tape {size, batch_size});
+        this->grad_op = use_id == prev->used() ? SET : INCREMENT;
+    }
+
+    void forward() override {
+        Layer::forward();
+        operations::screlu<data::GPU>(prev->dense_output.values, dense_output.values, max);
+    }
+    void backward() override {
+        Layer::backward();
+        operations::screlu_bp<data::GPU>(prev->dense_output.values,
+                                        prev->dense_output.gradients,
+                                        dense_output.values,
+                                        dense_output.gradients,
+                                        max,
+                                        grad_op);
+    }
+};
+
 }    // namespace nn
