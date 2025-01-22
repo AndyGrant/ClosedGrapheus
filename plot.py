@@ -11,7 +11,7 @@ DATA = [
     # ('run6/loss.csv', 'L1=64 1-byte (clip 127.0 / 32) + Material + 8x16x1'),
     # ('run7/loss.csv', '[WDL] L1=64 1-bits (clip 127.0 / 32) + Material + 8x16x1'),
     # ('run8/loss.csv', 'L1=64 1-byte ft/L1 (clip 127.0 / 32) + Material + 8x16x1'), # NEEDS TESTING
-    # ('run9/loss.csv', 'L1=64 1-byte (clip 127.0 / 32) + Material + 16x16x1'),
+    ('run9/loss.csv', 'L1=64 1-byte (clip 127.0 / 32) + Material + 16x16x1'),
     # ('run10/loss.csv', '[WDL] L1=64 1-byte (clip 127.0 / 32) + Material + 16x16x1'),
     # ('run11/loss.csv', '[WDL Big] L1=64 1-byte (clip 127.0 / 32) + Material + 16x16x1'),
     # ('run12/loss.csv', 'L1=64 1-byte ft/L1 (clip 127.0 / 32) + Material + 16x16x1'),
@@ -19,10 +19,12 @@ DATA = [
     # ('x48/loss.csv', 'L1=48 1-byte (clip 127.0 / 32) + Material + 16x16x1 + QAT'),
     ('x48_32-32/loss.csv', 'L1=48 32x32x1'),
     # ('x48_32-32_Q64/loss.csv', 'L1=48 32x32x1 Q64'),
-    ('x48_multiacti/loss.csv', 'L1=48 16x32x1 relu + sqcrelu'),
+    # ('x48_multiacti/loss.csv', 'L1=48 16x32x1 relu + sqcrelu'),
+    # ('x48_nolasso/loss.csv', 'L1=48 32x32x1 No Lasso'),
+    ('x64_mkp/loss.csv', 'L1=64 mirrored-kp'),
 ]
 
-DATA = [
+DATAWDL = [
     # ('run2/loss.csv', '[WDL] L1=64'),
     # ('run7/loss.csv', '[WDL] L1=64 1-bits (clip 127.0 / 32) + Material + 8x16x1'),
     # ('run10/loss.csv', '[WDL] L1=64 1-byte (clip 127.0 / 32) + Material + 16x16x1'),

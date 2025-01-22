@@ -49,9 +49,9 @@ namespace model {
 
         // Defines the sizes of the Network's Layers
 
-        const size_t n_l0 = 48; // Outputs, for each half. So L1 input is 2 x n_l0
-        const size_t n_l1 = 32; // Outputs. Makes this layer: 2 x n_l0 by n_l1
-        const size_t n_l2 = 32;
+        const size_t n_l0 = 64; // Outputs, for each half. So L1 input is 2 x n_l0
+        const size_t n_l1 = 16; // Outputs. Makes this layer: 2 x n_l0 by n_l1
+        const size_t n_l2 = 16;
         const size_t n_l3 = 1;
 
         // Defines miscellaneous hyper-parameters
@@ -63,9 +63,10 @@ namespace model {
         // Defines the mechanism of Quantization
 
         const size_t quant_ft = 32;
-        const size_t quant_l1 = 32;
+        // const size_t quant_l1 = 32;
 
         const double clip_ft  = 127.0 / quant_ft;
+        // const double clip_l1  = 127.0 / quant_l1;
 
         // Defines the ADAM Optimizer's hyper-parameters
 
@@ -76,8 +77,8 @@ namespace model {
 
         EtherealModel(size_t save_rate = 50) : ChessModel(0) {
 
-            half1 = add<SparseInput>(n_features, 32); // Max 32 pieces on the board at once
-            half2 = add<SparseInput>(n_features, 32); // Max 32 pieces on the board at once
+            half1 = add<SparseInput>(n_features, 31); // Max 31 relations "kp"
+            half2 = add<SparseInput>(n_features, 31); // Max 31 relations "kp"
             psqt  = add<DenseInput>(1);
 
             auto ft  = add<FeatureTransformer>(half1, half2, n_l0);
@@ -112,15 +113,36 @@ namespace model {
             );
         }
 
-        int ft_index(chess::Square pc_sq, chess::Piece pc, chess::Color view) {
+        int ft_index(chess::Square pc_sq, chess::Piece pc, chess::Color view, chess::Square k_sq) {
 
             const chess::PieceType piece_type  = chess::type_of(pc);
             const chess::Color     piece_color = chess::color_of(pc);
-            const chess::Square    rel_sq      = relative_square(view, pc_sq);
 
-            return (piece_color == view) * n_squares * n_piece_types
-                 +  piece_type * n_squares
-                 +  rel_sq;
+            // Swap it to the `view`s perspective
+            pc_sq = relative_square(view, pc_sq);
+
+            // If the King is on the Queen Side, Mirror the piece
+            if (queen_side_sq(relative_square(view, k_sq)))
+                pc_sq = mirror_square(pc_sq);
+
+            // If King, map RHS to usual 32 squares
+            if (piece_type == chess::KING)
+                pc_sq = 4 * rank_of(pc_sq) + file_of(pc_sq) - 4;
+
+            int idx = (piece_color == view) * n_squares * n_piece_types
+                    +  piece_type * n_squares
+                    +  pc_sq;
+
+            if (320 <= idx && idx < 384)
+                std::cout << "ERROR! ENEMEY KING DETECTED!";
+
+            if (736 <= idx && idx < 768)
+                std::cout << "ERROR! FRIENDLY KING NOT MAPPED!";
+
+            if (idx < 0 || idx >= 768)
+                std::cout << "ERROR: IDX OUTSIDE BOUNDS!";
+
+            return idx;
         }
 
         void setup_inputs_and_outputs(dataset::DataSet<chess::Position>* positions) {
@@ -130,7 +152,7 @@ namespace model {
 
             auto& target = m_loss->target;
 
-            int material_values[] = {208, 854, 915, 1380, 2682};
+            int material_values[] = {208, 854, 915, 1380, 2682, 0};
 
             #pragma omp parallel for schedule(static) num_threads(8)
             for (int b = 0; b < positions->header.entry_count; b++) {
@@ -142,13 +164,27 @@ namespace model {
 
                 chess::BB bb { pos->m_occupancy };
 
+                const chess::Square wking = pos->get_king_square<chess::WHITE>();
+                const chess::Square bking = pos->get_king_square<chess::BLACK>();
+
+                const chess::Square stm_king  = stm == chess::WHITE ? wking : bking;
+                const chess::Square nstm_king = stm == chess::WHITE ? bking : wking;
+
                 for (int index = 0; bb; index++) {
 
-                    chess::Square sq = chess::lsb(bb);
-                    chess::Piece  pc = pos->m_pieces.get_piece(index);
+                    const chess::Square sq = chess::lsb(bb);
+                    const chess::Piece  pc = pos->m_pieces.get_piece(index);
 
-                    half1->sparse_output.set(b, ft_index(sq, pc, stm));
-                    half2->sparse_output.set(b, ft_index(sq, pc, !stm));
+                    const chess::PieceType piece_type  = chess::type_of(pc);
+                    const chess::Color     piece_color = chess::color_of(pc);
+
+                    // Don't set for the Opposing player's King
+                    if (piece_type != chess::KING || piece_color == stm)
+                        half1->sparse_output.set(b, ft_index(sq, pc, stm, stm_king));
+
+                    // Don't set for the Opposing player's King
+                    if (piece_type != chess::KING || piece_color == !stm)
+                        half2->sparse_output.set(b, ft_index(sq, pc, !stm, nstm_king));
 
                     bb = chess::lsb_reset(bb);
 

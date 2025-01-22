@@ -13,12 +13,12 @@ n_colours     = 2
 n_features    = n_squares * n_piece_types * n_colours
 
 ft_in  = n_features
-ft_out = 48
-l1_in  = 96
-l1_out = 32
-l2_in  = 32
-l2_out = 32
-l3_in  = 32
+ft_out = 64
+l1_in  = 128
+l1_out = 16
+l2_in  = 16
+l2_out = 16
+l3_in  = 16
 l3_out = 1
 
 def quant_ft(f):
@@ -86,10 +86,12 @@ def main():
     array = np.array(ft_weights).reshape(ft_in, ft_out)
 
     ranges_to_delete = [
-        (440, 448),  # Black Pawn 8th
-        (384, 392),  # Black Pawn 1st
-        (56, 64),    # White Pawn 8th
-        (0, 8)       # White Pawn 1st
+        (736, 768),  # Friendly King, not mapped onto 32 for RHS
+        (440, 448),  # Friendly Pawn 8th Rank
+        (384, 392),  # Friendly Pawn 1st Rank
+        (320, 384),  # Enemy King
+        ( 56,  64),  # Enemy Pawn 8th Rank
+        (  0,   8),  # Enemy Pawn 1st Rank
     ]
 
     # Delete the specified ranges
@@ -118,7 +120,7 @@ def main():
     l1_weights = np.array(l1_weights).reshape(l1_in, l1_out).T.flatten()
     l2_weights = np.array(l2_weights).reshape(l2_in, l2_out).T.flatten()
 
-    # plt.hist(ft_weights, bins=255, color='blue', edgecolor='black')
+    plt.hist(ft_weights, bins=255, color='blue', edgecolor='black')
     # plt.hist(l1_weights, bins=255, color='blue', edgecolor='black')
 
     plt.title('Histogram Example')
