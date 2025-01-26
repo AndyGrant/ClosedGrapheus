@@ -54,7 +54,7 @@ def example_compression(array):
 
     return compressed_size
 
-def split_out_ft_averages(arr, chunk_size=16):
+def pre_process_ft_weights(arr, chunk_size=16):
 
     # Step 1: Chunk up the array into chunk_size portions
     n_chunks = len(arr) // chunk_size
@@ -62,8 +62,6 @@ def split_out_ft_averages(arr, chunk_size=16):
 
     # Step 2: Compute the floor of the average for each chunk
     chunk_averages = np.floor(np.mean(arr, axis=1)).astype(int)
-    chunk_mins     = np.floor(np.min(arr, axis=1)).astype(int)
-    chunk_maxs     = np.floor(np.max(arr, axis=1)).astype(int)
 
     # Step 3: Check if any values will go outside the range after +128 - avg operation
     adjusted_arrays = []; averages = []
@@ -72,15 +70,18 @@ def split_out_ft_averages(arr, chunk_size=16):
 
         adjusted_chunk = chunk - avg
 
-        # Undo, if we caused a value to exceed int8_t
-        if np.any(adjusted_chunk < -128) or np.any(adjusted_chunk > 127):
+        # Undo, if our values are not trivially small afterwards
+        if np.any(adjusted_chunk < -64) or np.any(adjusted_chunk >= 64):
             adjusted_chunk = chunk; avg = 0
 
         averages.append(avg)
         adjusted_arrays.append(adjusted_chunk)
 
-    # Step 4: Convert the adjusted chunks into a final array
-    return np.concatenate(adjusted_arrays), np.array(averages)
+    # Step 4: Do a cheeky remapping of integers
+    ft_weights = np.concatenate(adjusted_arrays)
+    ft_weights = np.abs(ft_weights) * 2 + (ft_weights < 0)
+
+    return ft_weights, np.array(averages)
 
 def flag_oversized_weights(l1_weights):
 
@@ -139,32 +140,12 @@ def main():
     for start, end in ranges_to_delete:
         array = np.delete(array, np.s_[start:end], axis=0)
 
-    # playing_games(array.T.flatten())
+    ft_weights, ft_averages = pre_process_ft_weights(array.T.flatten())
 
-    # best = do_the_thing(array.T.flatten().astype(np.int8))
-    # print ('Best: ' , best)
-    #
-    # while True:
-    #
-    #     # Shuffle the indices of the second dimension (columns)
-    #     shuffled_indices = np.random.permutation(array.shape[1])
-    #
-    #     # Reorder the array based on the shuffled indices
-    #     shuffled_array = array[:, shuffled_indices]
-    #
-    #     x = do_the_thing(shuffled_array.T.flatten().astype(np.int8))
-    #
-    #     if x < best:
-    #         best = x
-    #         print ('Best: ', best)
-    #         print (shuffled_indices)
-
-    ft_weights, ft_averages = split_out_ft_averages(array.T.flatten())
     l1_weights = np.array(l1_weights).reshape(l1_in, l1_out).T.flatten()
-    l2_weights = np.array(l2_weights).reshape(l2_in, l2_out).T.flatten()
-
     l1_weights, l1_excess = flag_oversized_weights(l1_weights)
-    z = np.concatenate([ft_weights, ft_averages]).astype(np.int8)
+
+    l2_weights = np.array(l2_weights).reshape(l2_in, l2_out).T.flatten()
 
     # plt.hist(ft_weights, bins=255, color='blue', edgecolor='black')
     # plt.hist(l1_weights, bins=255, color='blue', edgecolor='black')
@@ -177,7 +158,7 @@ def main():
     print ('#include <stdalign.h>\n')
     print ('#include <stdint.h>\n')
     print ('const float scale_l2 = %f;\n' % (scale_l2))
-    print ('alignas(64) const int8_t  ft_weights_i8[]  = {\n    %s\n};\n' % (','.join([str(f) for f in ft_weights  ])))
+    print ('alignas(64) const uint8_t ft_weights_i8[]  = {\n    %s\n};\n' % (','.join([str(f) for f in ft_weights  ])))
     print ('alignas(64) const int8_t  ft_weights_avg[] = {\n    %s\n};\n' % (','.join([str(f) for f in ft_averages ])))
     print ('alignas(64) const int16_t ft_bias[]        = {\n    %s\n};\n' % (','.join([str(f) for f in ft_bias     ])))
     print ('alignas(64) const int8_t  l1_weights_i8[]  = {\n    %s\n};\n' % (','.join([str(f) for f in l1_weights  ])))
