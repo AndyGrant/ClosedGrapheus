@@ -40,7 +40,7 @@ namespace model {
     struct EtherealModel : ChessModel {
 
         SparseInput *half1, *half2;
-        DenseInput *psqt;
+        DenseInput *psqt, *bucket_selector;
 
         const size_t n_squares     = 64;
         const size_t n_piece_types = 6;
@@ -53,6 +53,7 @@ namespace model {
         const size_t n_l1 = 16; // Outputs. Makes this layer: 2 x n_l0 by n_l1
         const size_t n_l2 = 16;
         const size_t n_l3 = 1;
+        const size_t n_buckets = 8;
 
         // Defines miscellaneous hyper-parameters
 
@@ -63,10 +64,14 @@ namespace model {
         // Defines the mechanism of Quantization
 
         const size_t quant_ft = 32;
-        // const size_t quant_l1 = 32;
+        const size_t quant_l1 = 32;
+        const size_t quant_l2 = 32;
+        const size_t quant_l3 = 32;
 
         const double clip_ft  = 127.0 / quant_ft;
-        // const double clip_l1  = 127.0 / quant_l1;
+        const double clip_l1  = 127.0 / quant_l1;
+        const double clip_l2  = 127.0 / quant_l2;
+        const double clip_l3  = 127.0 / quant_l3;
 
         // Defines the ADAM Optimizer's hyper-parameters
 
@@ -80,6 +85,7 @@ namespace model {
             half1 = add<SparseInput>(n_features, 31); // Max 31 relations "kp"
             half2 = add<SparseInput>(n_features, 31); // Max 31 relations "kp"
             psqt  = add<DenseInput>(1);
+            bucket_selector = add<DenseInput>(1);
 
             auto ft  = add<FeatureTransformer>(half1, half2, n_l0);
             ft->ft_regularization  = 1.0 / 16384.0 / 4194304.0;
@@ -90,11 +96,12 @@ namespace model {
             auto l1  = add<Affine>(fta, n_l1);
             auto l1a = add<ReLU>(l1);
 
-            auto l2  = add<Affine>(l1a, n_l2);
+            auto l2  = add<AffineMulti>(l1a, n_l2, n_buckets);
             auto l2a = add<ReLU>(l2);
 
-            auto l3  = add<Affine>(l2a, n_l3);
-            auto l3m = add<WeightedSum>(psqt, l3, 1, 1);
+            auto l3  = add<AffineBatched>(l2a, n_l3 * n_buckets, n_buckets);
+            auto l3s = add<SelectSingle>(l3, bucket_selector, n_buckets);
+            auto l3m = add<WeightedSum>(psqt, l3s, 1, 1);
             auto l3a = add<Sigmoid>(l3m, sigm_coeff);
 
             set_save_frequency(save_rate);
@@ -103,11 +110,11 @@ namespace model {
                 AdamWarmup({
                     {OptimizerEntry {&ft->weights}.clamp(-clip_ft, clip_ft)},
                     {OptimizerEntry {&ft->bias}},
-                    {OptimizerEntry {&l1->weights}},
+                    {OptimizerEntry {&l1->weights}.clamp(-clip_l1, clip_l1)},
                     {OptimizerEntry {&l1->bias}},
-                    {OptimizerEntry {&l2->weights}},
+                    {OptimizerEntry {&l2->weights}.clamp(-clip_l2, clip_l2)},
                     {OptimizerEntry {&l2->bias}},
-                    {OptimizerEntry {&l3->weights}},
+                    {OptimizerEntry {&l3->weights}.clamp(-clip_l3, clip_l3)},
                     {OptimizerEntry {&l3->bias}}
                 }, adam_beta1, adam_beta2, adam_eps, adam_warmup)
             );
@@ -132,15 +139,6 @@ namespace model {
             int idx = (piece_color == view) * n_squares * n_piece_types
                     +  piece_type * n_squares
                     +  pc_sq;
-
-            if (320 <= idx && idx < 384)
-                std::cout << "ERROR! ENEMEY KING DETECTED!";
-
-            if (736 <= idx && idx < 768)
-                std::cout << "ERROR! FRIENDLY KING NOT MAPPED!";
-
-            if (idx < 0 || idx >= 768)
-                std::cout << "ERROR: IDX OUTSIDE BOUNDS!";
 
             return idx;
         }
@@ -193,6 +191,7 @@ namespace model {
                 }
 
                 psqt->dense_output.values(0, b) = 0.50 * mat_value;
+                bucket_selector->dense_output.values(0, b) = (chess::popcount(pos->m_occupancy) - 1) / 4;
 
                 float eval_target = 1.0 / (1.0 + expf(-pos->m_result.score * sigm_coeff));
                 float wdl_target  = (pos->m_result.wdl + 1) / 2.0f; // -> [1.0, 0.5, 0.0] WDL
