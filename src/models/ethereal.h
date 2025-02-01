@@ -40,20 +40,25 @@ namespace model {
     struct EtherealModel : ChessModel {
 
         SparseInput *half1, *half2;
+        SparseInput *pawn1, *pawn2;
         DenseInput *psqt, *bucket_selector;
 
         const size_t n_squares     = 64;
         const size_t n_piece_types = 6;
         const size_t n_colours     = 2;
-        const size_t n_features    = n_squares * n_piece_types * n_colours;
+
+        const size_t n_features      = n_squares * n_piece_types * n_colours;
+        const size_t n_pawn_features = 96;
 
         // Defines the sizes of the Network's Layers
 
         const size_t n_l0 = 64; // Outputs, for each half. So L1 input is 2 x n_l0
-        const size_t n_l1 = 16; // Outputs. Makes this layer: 2 x n_l0 by n_l1
+        const size_t n_l1 = 8;  // Outputs. Makes this layer: 2 x n_l0 by n_l1
         const size_t n_l2 = 16;
         const size_t n_l3 = 1;
+
         const size_t n_buckets = 8;
+        const size_t pawn_n_l0 = 32;
 
         // Defines miscellaneous hyper-parameters
 
@@ -63,15 +68,17 @@ namespace model {
 
         // Defines the mechanism of Quantization
 
-        const size_t quant_ft = 32;
-        const size_t quant_l1 = 32;
-        const size_t quant_l2 = 32;
-        const size_t quant_l3 = 32;
+        const size_t quant_ft      = 32;
+        const size_t quant_l1      = 32;
+        const size_t quant_l2      = 32;
+        const size_t quant_l3      = 32;
+        const size_t quant_pawn_ft = 32;
 
-        const double clip_ft  = 127.0 / quant_ft;
-        const double clip_l1  = 127.0 / quant_l1;
-        const double clip_l2  = 127.0 / quant_l2;
-        const double clip_l3  = 127.0 / quant_l3;
+        const double clip_ft      = 127.0 / quant_ft;
+        const double clip_l1      = 127.0 / quant_l1;
+        const double clip_l2      = 127.0 / quant_l2;
+        const double clip_l3      = 127.0 / quant_l3;
+        const double clip_pawn_ft = 127.0 / quant_pawn_ft;
 
         // Defines the ADAM Optimizer's hyper-parameters
 
@@ -84,8 +91,14 @@ namespace model {
 
             half1 = add<SparseInput>(n_features, 31); // Max 31 relations "kp"
             half2 = add<SparseInput>(n_features, 31); // Max 31 relations "kp"
+
+            pawn1 = add<SparseInput>(n_pawn_features, 16); // Max 16 Pawns ever
+            pawn2 = add<SparseInput>(n_pawn_features, 16); // Max 16 Pawns ever
+
             psqt  = add<DenseInput>(1);
             bucket_selector = add<DenseInput>(1);
+
+            /* Regular FT */
 
             auto ft  = add<FeatureTransformer>(half1, half2, n_l0);
             ft->ft_regularization  = 1.0 / 16384.0 / 4194304.0;
@@ -93,7 +106,21 @@ namespace model {
             auto fta = add<ClippedRelu>(ft);
             fta->max = 127.0;
 
-            auto l1  = add<Affine>(fta, n_l1);
+            /* Pawn FT */
+
+            auto pawn_ft = add<FeatureTransformer>(pawn1, pawn2, pawn_n_l0);
+            pawn_ft->ft_regularization  = 1.0 / 16384.0 / 4194304.0;
+
+            auto pawn_fta = add<ClippedRelu>(pawn_ft);
+            pawn_fta->max = 127.0;
+
+            // Concat the multiple FTs
+
+            auto final_ft = add<Merge>(fta, pawn_fta);
+
+            // L1 -> L2 -> L3 + PSQT -> Sigmoid
+
+            auto l1  = add<Affine>(final_ft, n_l1);
             auto l1a = add<ReLU>(l1);
 
             auto l2  = add<AffineMulti>(l1a, n_l2, n_buckets);
@@ -110,6 +137,8 @@ namespace model {
                 AdamWarmup({
                     {OptimizerEntry {&ft->weights}.clamp(-clip_ft, clip_ft)},
                     {OptimizerEntry {&ft->bias}},
+                    {OptimizerEntry {&pawn_ft->weights}.clamp(-clip_pawn_ft, clip_pawn_ft)},
+                    {OptimizerEntry {&pawn_ft->bias}},
                     {OptimizerEntry {&l1->weights}.clamp(-clip_l1, clip_l1)},
                     {OptimizerEntry {&l1->bias}},
                     {OptimizerEntry {&l2->weights}.clamp(-clip_l2, clip_l2)},
@@ -143,10 +172,30 @@ namespace model {
             return idx;
         }
 
+        int pawn_index(chess::Square pc_sq, chess::Piece pc, chess::Color view, chess::Square k_sq) {
+
+            const chess::Color piece_color = chess::color_of(pc);
+
+            // Swap it to the `view`s perspective
+            pc_sq = relative_square(view, pc_sq);
+
+            // If the King is on the Queen Side, Mirror the piece
+            if (queen_side_sq(relative_square(view, k_sq)))
+                pc_sq = mirror_square(pc_sq);
+
+            int idx = (piece_color == view) * (n_squares - 16)
+                    + (pc_sq - 8);
+
+            return idx;
+        }
+
         void setup_inputs_and_outputs(dataset::DataSet<chess::Position>* positions) {
 
             half1->sparse_output.clear();
             half2->sparse_output.clear();
+
+            pawn1->sparse_output.clear();
+            pawn2->sparse_output.clear();
 
             auto& target = m_loss->target;
 
@@ -183,6 +232,12 @@ namespace model {
                     // Don't set for the Opposing player's King
                     if (piece_type != chess::KING || piece_color == !stm)
                         half2->sparse_output.set(b, ft_index(sq, pc, !stm, nstm_king));
+
+                    // Special Pawn net
+                    if (piece_type == chess::PAWN) {
+                        pawn1->sparse_output.set(b, pawn_index(sq, pc,  stm,  stm_king));
+                        pawn2->sparse_output.set(b, pawn_index(sq, pc, !stm, nstm_king));
+                    }
 
                     bb = chess::lsb_reset(bb);
 

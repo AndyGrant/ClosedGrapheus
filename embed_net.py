@@ -7,20 +7,24 @@ import struct
 import tarfile
 import tempfile
 
-n_squares     = 64
-n_piece_types = 6
-n_colours     = 2
-n_features    = n_squares * n_piece_types * n_colours
+n_squares       = 64
+n_piece_types   = 6
+n_colours       = 2
+n_features      = n_squares * n_piece_types * n_colours
+n_pawn_features = n_colours * (n_squares - 16)
 
-ft_in     = n_features
-ft_out    = 64
-l1_in     = 128
-l1_out    = 16
-l2_in     = 16
-l2_out    = 16
-l3_in     = 16
-l3_out    = 1
-n_buckets = 8
+pawn_ft_in  = n_pawn_features
+pawn_ft_out = 32
+ft_in       = n_features
+ft_out      = 64
+
+l1_in       = 2 * (ft_out + pawn_ft_out)
+l1_out      = 8
+l2_in       = 8
+l2_out      = 16
+l3_in       = 16
+l3_out      = 1
+n_buckets   = 8
 
 def quant_ft(f):
     return int(round(f * 32))
@@ -87,19 +91,6 @@ def pre_process_ft_weights(arr, chunk_size=16):
 
     return ft_weights, np.array(averages)
 
-def flag_oversized_weights(l1_weights):
-
-    excess_values  = []
-
-    assert -128 not in l1_weights
-
-    for idx, wgt in enumerate(l1_weights):
-        if wgt > 127 or wgt < -128:
-            excess_values.append(wgt)
-            l1_weights[idx] = -128
-
-    return l1_weights, excess_values
-
 def main():
 
     p = argparse.ArgumentParser()
@@ -107,23 +98,27 @@ def main():
     args = p.parse_args()
 
     with open(args.net, 'rb') as fin:
-        ft_weights = struct.unpack('%df' % (ft_in * ft_out), fin.read(ft_in * ft_out * 4))
-        ft_bias    = struct.unpack('%df' % (ft_out        ), fin.read(ft_out         * 4))
-        l1_weights = struct.unpack('%df' % (l1_in * l1_out), fin.read(l1_in * l1_out * 4))
-        l1_bias    = struct.unpack('%df' % (l1_out        ), fin.read(l1_out         * 4))
-        l2_weights = struct.unpack('%df' % (n_buckets * l2_in * l2_out), fin.read(n_buckets * l2_in * l2_out * 4))
-        l2_bias    = struct.unpack('%df' % (n_buckets * l2_out        ), fin.read(n_buckets * l2_out         * 4))
-        l3_weights = struct.unpack('%df' % (n_buckets * l3_in * l3_out), fin.read(n_buckets * l3_in * l3_out * 4))
-        l3_bias    = struct.unpack('%df' % (n_buckets * l3_out        ), fin.read(n_buckets * l3_out         * 4))
+        ft_weights      = struct.unpack('%df' % (ft_in * ft_out             ), fin.read(ft_in * ft_out * 4              ))
+        ft_bias         = struct.unpack('%df' % (ft_out                     ), fin.read(ft_out         * 4              ))
+        pawn_ft_weights = struct.unpack('%df' % (pawn_ft_in * pawn_ft_out   ), fin.read(pawn_ft_in * pawn_ft_out * 4    ))
+        pawn_ft_bias    = struct.unpack('%df' % (pawn_ft_out                ), fin.read(pawn_ft_out              * 4    ))
+        l1_weights      = struct.unpack('%df' % (l1_in * l1_out             ), fin.read(l1_in * l1_out * 4              ))
+        l1_bias         = struct.unpack('%df' % (l1_out                     ), fin.read(l1_out         * 4              ))
+        l2_weights      = struct.unpack('%df' % (n_buckets * l2_in * l2_out ), fin.read(n_buckets * l2_in * l2_out * 4  ))
+        l2_bias         = struct.unpack('%df' % (n_buckets * l2_out         ), fin.read(n_buckets * l2_out         * 4  ))
+        l3_weights      = struct.unpack('%df' % (n_buckets * l3_in * l3_out ), fin.read(n_buckets * l3_in * l3_out * 4  ))
+        l3_bias         = struct.unpack('%df' % (n_buckets * l3_out         ), fin.read(n_buckets * l3_out         * 4  ))
 
-    ft_weights = [          quant_ft(f) for f in ft_weights]
-    ft_bias    = [          quant_ft(f) for f in ft_bias   ]
-    l1_weights = [          quant_l1(f) for f in l1_weights]
-    l1_bias    = [          quant_l1(f) for f in l1_bias   ]
-    l2_weights = [          quant_l2(f) for f in l2_weights]
-    l2_bias    = [          quant_l2(f) for f in l2_bias   ]
-    l3_weights = [                   f  for f in l3_weights]
-    l3_bias    = [32 * 32 * 32 *     f  for f in l3_bias   ]
+    ft_weights      = [          quant_ft(f) for f in ft_weights      ]
+    ft_bias         = [          quant_ft(f) for f in ft_bias         ]
+    pawn_ft_weights = [          quant_ft(f) for f in pawn_ft_weights ]
+    pawn_ft_bias    = [          quant_ft(f) for f in pawn_ft_bias    ]
+    l1_weights      = [          quant_l1(f) for f in l1_weights      ]
+    l1_bias         = [          quant_l1(f) for f in l1_bias         ]
+    l2_weights      = [          quant_l2(f) for f in l2_weights      ]
+    l2_bias         = [          quant_l2(f) for f in l2_bias         ]
+    l3_weights      = [                   f  for f in l3_weights      ]
+    l3_bias         = [32 * 32 * 32 *     f  for f in l3_bias         ]
 
     # Convert the list into a 768xL1 numpy array
     array = np.array(ft_weights).reshape(ft_in, ft_out)
@@ -143,9 +138,10 @@ def main():
 
     ft_weights, ft_averages = pre_process_ft_weights(array.T.flatten())
 
-    l1_weights = np.array(l1_weights).reshape(l1_in, l1_out).T.flatten()
-    l1_weights, l1_excess = flag_oversized_weights(l1_weights)
+    array = np.array(pawn_ft_weights).reshape(pawn_ft_in, pawn_ft_out)
+    pawn_ft_weights, pawn_ft_averages = pre_process_ft_weights(array.T.flatten())
 
+    l1_weights = np.array(l1_weights).reshape(l1_in, l1_out).T.flatten()
     l2_weights = np.array(l2_weights).reshape(l2_in, n_buckets * l2_out).T.flatten()
     l3_weights = np.array(l3_weights).reshape(l3_in, n_buckets * l3_out).T.flatten()
 
@@ -159,15 +155,18 @@ def main():
     print ('#pragma once\n')
     print ('#include <stdalign.h>\n')
     print ('#include <stdint.h>\n')
-    print ('alignas(64) const uint8_t ft_weights_i8[]  = {\n    %s\n};\n' % (','.join([str(f) for f in ft_weights  ])))
-    print ('alignas(64) const int8_t  ft_weights_avg[] = {\n    %s\n};\n' % (','.join([str(f) for f in ft_averages ])))
-    print ('alignas(64) const int16_t ft_bias[]        = {\n    %s\n};\n' % (','.join([str(f) for f in ft_bias     ])))
-    print ('alignas(64) const int8_t  l1_weights_i8[]  = {\n    %s\n};\n' % (','.join([str(f) for f in l1_weights  ])))
-    print ('alignas(64) const int16_t l1_bias_i16[]    = {\n    %s\n};\n' % (','.join([str(f) for f in l1_bias     ])))
-    print ('alignas(64) const int8_t  l2_weights_i8[]  = {\n    %s\n};\n' % (','.join([str(f) for f in l2_weights  ])))
-    print ('alignas(64) const int16_t l2_bias_i16[]    = {\n    %s\n};\n' % (','.join([str(f) for f in l2_bias     ])))
-    print ('alignas(64) const float   l3_weights[]     = {\n    %s\n};\n' % (','.join([str(f) for f in l3_weights  ])))
-    print ('alignas(64) const float   l3_bias[]        = {\n    %s\n};\n' % (','.join([str(f) for f in l3_bias     ])))
+    print ('alignas(64) const uint8_t ft_weights_i8[]       = {\n    %s\n};\n' % (','.join([str(f) for f in ft_weights       ])))
+    print ('alignas(64) const int8_t  ft_weights_avg[]      = {\n    %s\n};\n' % (','.join([str(f) for f in ft_averages      ])))
+    print ('alignas(64) const int16_t ft_bias[]             = {\n    %s\n};\n' % (','.join([str(f) for f in ft_bias          ])))
+    print ('alignas(64) const uint8_t pawn_ft_weights_i8[]  = {\n    %s\n};\n' % (','.join([str(f) for f in pawn_ft_weights  ])))
+    print ('alignas(64) const int8_t  pawn_ft_weights_avg[] = {\n    %s\n};\n' % (','.join([str(f) for f in pawn_ft_averages ])))
+    print ('alignas(64) const int16_t pawn_ft_bias[]        = {\n    %s\n};\n' % (','.join([str(f) for f in pawn_ft_bias     ])))
+    print ('alignas(64) const int8_t  l1_weights_i8[]       = {\n    %s\n};\n' % (','.join([str(f) for f in l1_weights       ])))
+    print ('alignas(64) const int16_t l1_bias_i16[]         = {\n    %s\n};\n' % (','.join([str(f) for f in l1_bias          ])))
+    print ('alignas(64) const int8_t  l2_weights_i8[]       = {\n    %s\n};\n' % (','.join([str(f) for f in l2_weights       ])))
+    print ('alignas(64) const int16_t l2_bias_i16[]         = {\n    %s\n};\n' % (','.join([str(f) for f in l2_bias          ])))
+    print ('alignas(64) const float   l3_weights[]          = {\n    %s\n};\n' % (','.join([str(f) for f in l3_weights       ])))
+    print ('alignas(64) const float   l3_bias[]             = {\n    %s\n};\n' % (','.join([str(f) for f in l3_bias          ])))
 
 if __name__ == '__main__':
     main()
