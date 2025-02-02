@@ -145,6 +145,10 @@ def main():
     l2_weights = np.array(l2_weights).reshape(l2_in, n_buckets * l2_out).T.flatten()
     l3_weights = np.array(l3_weights).reshape(l3_in, n_buckets * l3_out).T.flatten()
 
+    l3_weight_scale = (2**15 - 1) / max(abs(l3_weights))
+    l3_weights      = (l3_weights * l3_weight_scale).astype(np.int16).flatten()
+
+
     # plt.hist(ft_weights, bins=255, color='blue', edgecolor='black')
     # plt.hist(l1_weights, bins=255, color='blue', edgecolor='black')
     # plt.title('Histogram Example')
@@ -155,6 +159,7 @@ def main():
     print ('#pragma once\n')
     print ('#include <stdalign.h>\n')
     print ('#include <stdint.h>\n')
+    print ('const float l3_weight_scale = %f\n;' % (l3_weight_scale))
     print ('alignas(64) const uint8_t ft_weights_i8[]       = {\n    %s\n};\n' % (','.join([str(f) for f in ft_weights       ])))
     print ('alignas(64) const int8_t  ft_weights_avg[]      = {\n    %s\n};\n' % (','.join([str(f) for f in ft_averages      ])))
     print ('alignas(64) const int16_t ft_bias[]             = {\n    %s\n};\n' % (','.join([str(f) for f in ft_bias          ])))
@@ -165,7 +170,7 @@ def main():
     print ('alignas(64) const int16_t l1_bias_i16[]         = {\n    %s\n};\n' % (','.join([str(f) for f in l1_bias          ])))
     print ('alignas(64) const int8_t  l2_weights_i8[]       = {\n    %s\n};\n' % (','.join([str(f) for f in l2_weights       ])))
     print ('alignas(64) const int16_t l2_bias_i16[]         = {\n    %s\n};\n' % (','.join([str(f) for f in l2_bias          ])))
-    print ('alignas(64) const float   l3_weights[]          = {\n    %s\n};\n' % (','.join([str(f) for f in l3_weights       ])))
+    print ('alignas(64) const int16_t l3_weights_i16[]      = {\n    %s\n};\n' % (','.join([str(f) for f in l3_weights       ])))
     print ('alignas(64) const float   l3_bias[]             = {\n    %s\n};\n' % (','.join([str(f) for f in l3_bias          ])))
 
 if __name__ == '__main__':
