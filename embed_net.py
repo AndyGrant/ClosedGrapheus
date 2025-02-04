@@ -14,11 +14,11 @@ n_features      = n_squares * n_piece_types * n_colours
 n_pawn_features = n_colours * (n_squares - 16)
 
 pawn_ft_in  = n_pawn_features
-pawn_ft_out = 32
+pawn_ft_out = 64
 ft_in       = n_features
 ft_out      = 64
 
-l1_in       = 2 * (ft_out + pawn_ft_out)
+l1_in       = (ft_out + pawn_ft_out)
 l1_out      = 8
 l2_in       = 8
 l2_out      = 16
@@ -27,6 +27,9 @@ l3_out      = 1
 n_buckets   = 8
 
 def quant_ft(f):
+    return int(round(f * 64))
+
+def quant_pawn_ft(f):
     return int(round(f * 32))
 
 def quant_l1(f):
@@ -111,8 +114,8 @@ def main():
 
     ft_weights      = [          quant_ft(f) for f in ft_weights      ]
     ft_bias         = [          quant_ft(f) for f in ft_bias         ]
-    pawn_ft_weights = [          quant_ft(f) for f in pawn_ft_weights ]
-    pawn_ft_bias    = [          quant_ft(f) for f in pawn_ft_bias    ]
+    pawn_ft_weights = [     quant_pawn_ft(f) for f in pawn_ft_weights ]
+    pawn_ft_bias    = [     quant_pawn_ft(f) for f in pawn_ft_bias    ]
     l1_weights      = [          quant_l1(f) for f in l1_weights      ]
     l1_bias         = [          quant_l1(f) for f in l1_bias         ]
     l2_weights      = [          quant_l2(f) for f in l2_weights      ]
@@ -136,6 +139,13 @@ def main():
     for start, end in ranges_to_delete:
         array = np.delete(array, np.s_[start:end], axis=0)
 
+    # plt.hist(ft_weights, bins=255, color='blue', edgecolor='black')
+    plt.hist(array.T.flatten(), bins=255, color='blue', edgecolor='black')
+    plt.title('Histogram Example')
+    plt.xlabel('Value')
+    plt.ylabel('Frequency')
+    plt.savefig('histogram.png')
+
     ft_weights, ft_averages = pre_process_ft_weights(array.T.flatten())
 
     array = np.array(pawn_ft_weights).reshape(pawn_ft_in, pawn_ft_out)
@@ -148,13 +158,6 @@ def main():
     l3_weight_scale = (2**15 - 1) / max(abs(l3_weights))
     l3_weights      = (l3_weights * l3_weight_scale).astype(np.int16).flatten()
 
-
-    # plt.hist(ft_weights, bins=255, color='blue', edgecolor='black')
-    # plt.hist(l1_weights, bins=255, color='blue', edgecolor='black')
-    # plt.title('Histogram Example')
-    # plt.xlabel('Value')
-    # plt.ylabel('Frequency')
-    # plt.savefig('histogram.png')
 
     print ('#pragma once\n')
     print ('#include <stdalign.h>\n')

@@ -58,7 +58,7 @@ namespace model {
         const size_t n_l3 = 1;
 
         const size_t n_buckets = 8;
-        const size_t pawn_n_l0 = 32;
+        const size_t pawn_n_l0 = 64;
 
         // Defines miscellaneous hyper-parameters
 
@@ -74,7 +74,7 @@ namespace model {
         const size_t quant_l3      = 32;
         const size_t quant_pawn_ft = 32;
 
-        const double clip_ft      = 127.0 / quant_ft;
+        const double clip_ft      = 63.0  / quant_ft;
         const double clip_l1      = 127.0 / quant_l1;
         const double clip_l2      = 127.0 / quant_l2;
         const double clip_l3      = 127.0 / quant_l3;
@@ -104,7 +104,9 @@ namespace model {
             ft->ft_regularization  = 1.0 / 16384.0 / 4194304.0;
 
             auto fta = add<ClippedRelu>(ft);
-            fta->max = 127.0;
+            fta->max = 127.0 / 32.0;
+
+            auto ft_pair = add<ChunkwiseMul>(fta, 4);
 
             /* Pawn FT */
 
@@ -112,11 +114,13 @@ namespace model {
             pawn_ft->ft_regularization  = 1.0 / 16384.0 / 4194304.0;
 
             auto pawn_fta = add<ClippedRelu>(pawn_ft);
-            pawn_fta->max = 127.0;
+            pawn_fta->max = 127.0 / 32.0;
+
+            auto pawn_ft_pair = add<ChunkwiseMul>(pawn_fta, 4);
 
             // Concat the multiple FTs
 
-            auto final_ft = add<Merge>(fta, pawn_fta);
+            auto final_ft = add<Merge>(ft_pair, pawn_ft_pair);
 
             // L1 -> L2 -> L3 + PSQT -> Sigmoid
 
